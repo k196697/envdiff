@@ -1,63 +1,68 @@
 package diff
 
-// KeyStatus represents the comparison result for a single key.
-type KeyStatus int
+import "sort"
+
+// Status represents the comparison status of a key.
+type Status string
 
 const (
-	StatusMatch    KeyStatus = iota // key exists in both with same value
-	StatusMismatch                  // key exists in both but values differ
-	StatusMissingB                  // key exists in A but not in B
-	StatusMissingA                  // key exists in B but not in A
+	StatusMatch      Status = "match"
+	StatusMismatch   Status = "mismatch"
+	StatusMissingInA Status = "missing_in_a"
+	StatusMissingInB Status = "missing_in_b"
 )
 
-// Result holds the comparison result for a single key across two env files.
+// Result holds the comparison result for a single key.
 type Result struct {
-	Key      string
-	ValueA   string
-	ValueB   string
-	Status   KeyStatus
+	Key     string
+	Status  Status
+	ValueA  string
+	ValueB  string
 }
 
-// Compare takes two parsed env maps (fileA, fileB) and returns a slice of
-// Result entries describing every key found in either file.
-func Compare(fileA, fileB map[string]string) []Result {
-	seen := make(map[string]bool)
-	var results []Result
+// Compare compares two env maps and returns a sorted slice of Results.
+func Compare(a, b map[string]string) []Result {
+	keys := make(map[string]struct{})
+	for k := range a {
+		keys[k] = struct{}{}
+	}
+	for k := range b {
+		keys[k] = struct{}{}
+	}
 
-	for k, vA := range fileA {
-		seen[k] = true
-		vB, ok := fileB[k]
+	results := make([]Result, 0, len(keys))
+	for k := range keys {
+		va, inA := a[k]
+		vb, inB := b[k]
 		switch {
-		case !ok:
-			results = append(results, Result{Key: k, ValueA: vA, Status: StatusMissingB})
-		case vA == vB:
-			results = append(results, Result{Key: k, ValueA: vA, ValueB: vB, Status: StatusMatch})
+		case inA && inB && va == vb:
+			results = append(results, Result{Key: k, Status: StatusMatch, ValueA: va, ValueB: vb})
+		case inA && inB:
+			results = append(results, Result{Key: k, Status: StatusMismatch, ValueA: va, ValueB: vb})
+		case inA:
+			results = append(results, Result{Key: k, Status: StatusMissingInB, ValueA: va})
 		default:
-			results = append(results, Result{Key: k, ValueA: vA, ValueB: vB, Status: StatusMismatch})
+			results = append(results, Result{Key: k, Status: StatusMissingInA, ValueB: vb})
 		}
 	}
-
-	for k, vB := range fileB {
-		if !seen[k] {
-			results = append(results, Result{Key: k, ValueB: vB, Status: StatusMissingA})
-		}
-	}
-
+	sort.Slice(results, func(i, j int) bool {
+		return results[i].Key < results[j].Key
+	})
 	return results
 }
 
-// Summary returns counts of each status across the results.
-func Summary(results []Result) (match, mismatch, missingB, missingA int) {
+// Summary returns counts of each status type.
+func Summary(results []Result) (match, mismatch, missingA, missingB int) {
 	for _, r := range results {
 		switch r.Status {
 		case StatusMatch:
 			match++
 		case StatusMismatch:
 			mismatch++
-		case StatusMissingB:
-			missingB++
-		case StatusMissingA:
+		case StatusMissingInA:
 			missingA++
+		case StatusMissingInB:
+			missingB++
 		}
 	}
 	return
