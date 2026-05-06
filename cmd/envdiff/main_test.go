@@ -28,13 +28,18 @@ func buildBinary(t *testing.T) string {
 	return bin
 }
 
+func runEnvdiff(t *testing.T, bin string, args ...string) ([]byte, error) {
+	t.Helper()
+	cmd := exec.Command(bin, args...)
+	return cmd.CombinedOutput()
+}
+
 func TestMain_AllMatch(t *testing.T) {
 	bin := buildBinary(t)
 	a := writeTempEnv(t, "FOO=bar\nBAZ=qux\n")
 	b := writeTempEnv(t, "FOO=bar\nBAZ=qux\n")
 
-	cmd := exec.Command(bin, "--no-color", a, b)
-	out, err := cmd.CombinedOutput()
+	out, err := runEnvdiff(t, bin, "--no-color", a, b)
 	if err != nil {
 		t.Fatalf("expected exit 0, got error: %v\noutput: %s", err, out)
 	}
@@ -45,8 +50,7 @@ func TestMain_Mismatch_ExitOne(t *testing.T) {
 	a := writeTempEnv(t, "FOO=bar\n")
 	b := writeTempEnv(t, "FOO=different\n")
 
-	cmd := exec.Command(bin, "--no-color", a, b)
-	out, err := cmd.CombinedOutput()
+	out, err := runEnvdiff(t, bin, "--no-color", a, b)
 	if err == nil {
 		t.Fatalf("expected non-zero exit, got 0\noutput: %s", out)
 	}
@@ -57,8 +61,7 @@ func TestMain_QuietFlag(t *testing.T) {
 	a := writeTempEnv(t, "FOO=bar\n")
 	b := writeTempEnv(t, "FOO=other\n")
 
-	cmd := exec.Command(bin, "--quiet", a, b)
-	out, err := cmd.CombinedOutput()
+	out, err := runEnvdiff(t, bin, "--quiet", a, b)
 	if err == nil {
 		t.Fatalf("expected non-zero exit for mismatch")
 	}
@@ -69,8 +72,8 @@ func TestMain_QuietFlag(t *testing.T) {
 
 func TestMain_MissingArgs(t *testing.T) {
 	bin := buildBinary(t)
-	cmd := exec.Command(bin)
-	if err := cmd.Run(); err == nil {
-		t.Fatal("expected non-zero exit when no args provided")
+	out, err := runEnvdiff(t, bin)
+	if err == nil {
+		t.Fatalf("expected non-zero exit when no args provided\noutput: %s", out)
 	}
 }
