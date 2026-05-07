@@ -1,81 +1,83 @@
-// Package config handles parsing and validation of CLI flags and options
-// for the envdiff tool.
+// Package config parses CLI flags and environment variables into a Config struct.
 package config
 
 import (
-	"errors"
 	"flag"
 	"fmt"
 	"strings"
 )
 
-// Format represents the output format for diff results.
-type Format string
-
-const (
-	FormatText Format = "text"
-	FormatJSON Format = "json"
-)
-
-// Options holds all configuration parsed from CLI flags.
-type Options struct {
-	Files       []string
-	Dir         string
-	Prefix      string
-	ExcludeKeys []string
-	Format      Format
-	Quiet       bool
+// Config holds all runtime options for envdiff.
+type Config struct {
+	Files      []string
+	Dir        string
+	Format     string
+	Exclude    []string
+	Prefix     string
+	SortBy     string
+	OutputPath string
+	ExportFmt  string
+	ExportStats bool
 }
 
-// Parse reads arguments and returns a populated Options struct.
-func Parse(args []string) (*Options, error) {
-	fs := flag.NewFlagSet("envdiff", flag.ContinueOnError)
+var validFormats = map[string]bool{"text": true, "json": true}
+var validExportFmts = map[string]bool{"text": true, "json": true, "markdown": true}
+var validSortBy = map[string]bool{"key": true, "status": true, "file": true}
 
-	dir := fs.String("dir", "", "directory containing .env files to compare")
-	prefix := fs.String("prefix", "", "only include keys with this prefix")
-	exclude := fs.String("exclude", "", "comma-separated list of keys to exclude")
-	format := fs.String("format", "text", "output format: text or json")
-	quiet := fs.Bool("quiet", false, "suppress output, only set exit code")
+// Parse reads os.Args using the provided FlagSet and returns a Config.
+func Parse(fs *flag.FlagSet, args []string) (*Config, error) {
+	var (
+		dir         string
+		format      string
+		exclude     string
+		prefix      string
+		sortBy      string
+		outputPath  string
+		exportFmt   string
+		exportStats bool
+	)
+
+	fs.StringVar(&dir, "dir", "", "directory containing .env files")
+	fs.StringVar(&format, "format", "text", "output format: text|json")
+	fs.StringVar(&exclude, "exclude", "", "comma-separated keys to exclude")
+	fs.StringVar(&prefix, "prefix", "", "only compare keys with this prefix")
+	fs.StringVar(&sortBy, "sort", "key", "sort results by: key|status|file")
+	fs.StringVar(&outputPath, "output", "", "write report to this file path")
+	fs.StringVar(&exportFmt, "export-format", "text", "export format: text|json|markdown")
+	fs.BoolVar(&exportStats, "export-stats", false, "include stats in exported report")
 
 	if err := fs.Parse(args); err != nil {
 		return nil, err
 	}
 
-	opts := &Options{
-		Files:  fs.Args(),
-		Dir:    *dir,
-		Prefix: *prefix,
-		Quiet:  *quiet,
+	if !validFormats[format] {
+		return nil, fmt.Errorf("invalid format %q: must be text or json", format)
+	}
+	if !validExportFmts[exportFmt] {
+		return nil, fmt.Errorf("invalid export-format %q: must be text, json or markdown", exportFmt)
+	}
+	if !validSortBy[sortBy] {
+		return nil, fmt.Errorf("invalid sort %q: must be key, status or file", sortBy)
 	}
 
-	switch Format(*format) {
-	case FormatText, FormatJSON:
-		opts.Format = Format(*format)
-	default:
-		return nil, fmt.Errorf("unknown format %q: must be \"text\" or \"json\"", *format)
-	}
-
-	if *exclude != "" {
-		for _, k := range strings.Split(*exclude, ",") {
-			if k = strings.TrimSpace(k); k != "" {
-				opts.ExcludeKeys = append(opts.ExcludeKeys, k)
+	var excludeKeys []string
+	if exclude != "" {
+		for _, k := range strings.Split(exclude, ",") {
+			if t := strings.TrimSpace(k); t != "" {
+				excludeKeys = append(excludeKeys, t)
 			}
 		}
 	}
 
-	if err := opts.validate(); err != nil {
-		return nil, err
-	}
-
-	return opts, nil
-}
-
-func (o *Options) validate() error {
-	if o.Dir == "" && len(o.Files) < 2 {
-		return errors.New("provide at least two .env files or use --dir")
-	}
-	if o.Dir != "" && len(o.Files) > 0 {
-		return errors.New("--dir and positional file arguments are mutually exclusive")
-	}
-	return nil
+	return &Config{
+		Files:       fs.Args(),
+		Dir:         dir,
+		Format:      format,
+		Exclude:     excludeKeys,
+		Prefix:      prefix,
+		SortBy:      sortBy,
+		OutputPath:  outputPath,
+		ExportFmt:   exportFmt,
+		ExportStats: exportStats,
+	}, nil
 }
