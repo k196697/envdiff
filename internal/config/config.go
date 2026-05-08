@@ -60,6 +60,11 @@ func Parse(fs *flag.FlagSet, args []string) (*Config, error) {
 		return nil, fmt.Errorf("invalid sort %q: must be key, status or file", sortBy)
 	}
 
+	// Require at least one input source: explicit files or a directory.
+	if dir == "" && len(fs.Args()) == 0 {
+		return nil, fmt.Errorf("no input provided: specify files as arguments or use -dir")
+	}
+
 	var excludeKeys []string
 	if exclude != "" {
 		for _, k := range strings.Split(exclude, ",") {
