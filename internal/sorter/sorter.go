@@ -62,3 +62,15 @@ func Sort(results []diff.Result, order SortOrder) []diff.Result {
 
 	return out
 }
+
+// Filter returns a new slice containing only the Results that satisfy the
+// provided predicate function. The original slice is not modified.
+func Filter(results []diff.Result, predicate func(diff.Result) bool) []diff.Result {
+	out := make([]diff.Result, 0, len(results))
+	for _, r := range results {
+		if predicate(r) {
+			out = append(out, r)
+		}
+	}
+	return out
+}
