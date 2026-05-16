@@ -7,15 +7,20 @@ import (
 	"github.com/user/envdiff/internal/snapshotter"
 )
 
+// writeReportOutput is a helper that captures WriteReport output as a string.
+func writeReportOutput(before, after snapshotter.Snapshot, deltas []snapshotter.Delta) string {
+	var sb strings.Builder
+	snapshotter.WriteReport(&sb, before, after, deltas)
+	return sb.String()
+}
+
 func TestWriteReport_NoChanges(t *testing.T) {
 	env := map[string]string{"A": "1"}
 	before := snapshotter.Capture("staging", env)
 	after := snapshotter.Capture("prod", env)
 	deltas := snapshotter.Diff(before, after)
 
-	var sb strings.Builder
-	snapshotter.WriteReport(&sb, before, after, deltas)
-	out := sb.String()
+	out := writeReportOutput(before, after, deltas)
 
 	if !strings.Contains(out, "No changes detected") {
 		t.Errorf("expected no-change message, got:\n%s", out)
@@ -30,9 +35,7 @@ func TestWriteReport_ShowsAdded(t *testing.T) {
 	after := snapshotter.Capture("b", map[string]string{"NEW_KEY": "hello"})
 	deltas := snapshotter.Diff(before, after)
 
-	var sb strings.Builder
-	snapshotter.WriteReport(&sb, before, after, deltas)
-	out := sb.String()
+	out := writeReportOutput(before, after, deltas)
 
 	if !strings.Contains(out, "+ NEW_KEY") {
 		t.Errorf("expected added key in output, got:\n%s", out)
@@ -47,9 +50,7 @@ func TestWriteReport_ShowsRemoved(t *testing.T) {
 	after := snapshotter.Capture("b", map[string]string{})
 	deltas := snapshotter.Diff(before, after)
 
-	var sb strings.Builder
-	snapshotter.WriteReport(&sb, before, after, deltas)
-	out := sb.String()
+	out := writeReportOutput(before, after, deltas)
 
 	if !strings.Contains(out, "- OLD") {
 		t.Errorf("expected removed key in output, got:\n%s", out)
@@ -64,9 +65,7 @@ func TestWriteReport_ShowsChanged(t *testing.T) {
 	after := snapshotter.Capture("b", map[string]string{"HOST": "prod.example.com"})
 	deltas := snapshotter.Diff(before, after)
 
-	var sb strings.Builder
-	snapshotter.WriteReport(&sb, before, after, deltas)
-	out := sb.String()
+	out := writeReportOutput(before, after, deltas)
 
 	if !strings.Contains(out, "~ HOST") {
 		t.Errorf("expected changed key in output, got:\n%s", out)
@@ -81,9 +80,7 @@ func TestWriteReport_SortedOutput(t *testing.T) {
 	after := snapshotter.Capture("b", map[string]string{"Z": "2", "A": "2"})
 	deltas := snapshotter.Diff(before, after)
 
-	var sb strings.Builder
-	snapshotter.WriteReport(&sb, before, after, deltas)
-	out := sb.String()
+	out := writeReportOutput(before, after, deltas)
 
 	idxA := strings.Index(out, "A")
 	idxZ := strings.Index(out, "Z")
